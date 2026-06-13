@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Rakshika Cyber Crime Investigation Dashboard — Real-time cyber crime case management for police cyber cell." />
+  <title>Rakshika — Cyber Crime Investigation</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/cyber.css" />
+
+  <style>
+    /* ---- Add Report Modal ---- */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 4, 8, 0.85);
+      backdrop-filter: blur(4px);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-glow);
+      border-radius: var(--r-xl);
+      width: 100%;
+      max-width: 560px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.8), var(--glow-purple);
+      animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes modalIn {
+      from { transform: scale(0.9); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+
+    .modal-head {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-card-2);
+    }
+
+    .modal-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--purple-400), var(--cyan-400));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+
+    .form-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-2);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .form-input, .form-select, .form-textarea {
+      background: var(--bg-input);
+      border: 1px solid var(--border-glow);
+      border-radius: var(--r-sm);
+      color: var(--text-1);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
+      width: 100%;
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--purple-500);
+      box-shadow: 0 0 0 3px rgba(139,92,246,0.12);
+    }
+
+    .form-input::placeholder, .form-textarea::placeholder { color: var(--text-3); }
+
+    .form-select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+      cursor: pointer;
+    }
+
+    .form-select option { background: var(--bg-card); }
+
+    .form-textarea { resize: vertical; min-height: 90px; line-height: 1.6; }
+
+    .modal-foot {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      background: var(--bg-card-2);
+    }
+
+    /* ---- Pulse ring on high-risk rows ---- */
+    .reports-table tbody tr.selected-row td:first-child::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--purple-400);
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    /* Active status button */
+    .active-status {
+      opacity: 1 !important;
+      filter: brightness(1.3);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="cyber-layout">
+
+    <!-- ==========================================
+         SIDEBAR
+    ========================================== -->
+    <aside class="cyber-sidebar" id="cyberSidebar">
+
+      <div class="sb-logo" style="padding: 0 12px; justify-content: flex-start;">
+        <a href="index.html" style="display: flex; align-items: center; height: 100%;">
+          <img src="assets/logo.png" alt="Rakshika Logo" style="height: 42px; width: auto; max-width: 100%; object-fit: contain;">
+        </a>
+      </div>
+
+      <nav class="sb-nav">
+        <div class="sb-section-label">Investigation</div>
+
+        <button class="sb-item active" onclick="document.getElementById('reportsSection').scrollIntoView({behavior:'smooth'})">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+          Case Reports
+          <span class="sb-badge" id="sbPendingCount">0</span>
+        </button>
+
+        <button class="sb-item" onclick="document.getElementById('evidenceSection').scrollIntoView({behavior:'smooth'})">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          Evidence Viewer
+        </button>
+
+        <button class="sb-item" onclick="document.getElementById('analyticsSection').scrollIntoView({behavior:'smooth'})">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+          Analytics
+        </button>
+
+        <div class="sb-section-label" style="margin-top:8px">Risk Alerts</div>
+
+        <button class="sb-item" id="btnFilterHighRisk"
+          onclick="document.getElementById('statusFilter').value='pending'; document.getElementById('statusFilter').dispatchEvent(new Event('change')); document.getElementById('reportsSection').scrollIntoView({behavior:'smooth'})">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span style="color:#f87171">High Risk Cases</span>
+          <span class="sb-badge" id="sbHighRiskCount" style="background:#ef4444">0</span>
+        </button>
+
+        <div class="sb-section-label" style="margin-top:8px">Navigation</div>
+
+        <a class="sb-item" href="index.html">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          </svg>
+          Home
+        </a>
+      </nav>
+
+      <div class="sb-footer">
+        <div class="sb-officer">
+          <div class="sb-avatar">CC</div>
+          <div class="sb-officer-info">
+            <div class="name">Cyber Cell</div>
+            <div class="role">INVESTIGATING OFFICER</div>
+          </div>
+        </div>
+        <div class="sb-status-dot">
+          <div class="pulse-dot"></div>
+          SYSTEM ACTIVE
+        </div>
+      </div>
+    </aside>
+
+    <!-- Mobile overlay -->
+    <div class="mob-overlay" id="mobOverlay"></div>
+
+    <!-- ==========================================
+         MAIN CONTENT
+    ========================================== -->
+    <main class="cyber-main">
+
+      <!-- Mobile Top Bar -->
+      <header class="mobile-topbar">
+        <button class="mob-menu" id="mobMenuBtn">☰</button>
+        <span style="font-family:'Outfit',sans-serif;font-weight:700;font-size:1rem;
+          background:linear-gradient(135deg,#a78bfa,#22d3ee);-webkit-background-clip:text;
+          -webkit-text-fill-color:transparent">💻 Cyber Investigation</span>
+        <div style="width:32px"></div>
+      </header>
+
+      <!-- Desktop Top Bar -->
+      <div class="cyber-topbar">
+        <div class="topbar-left">
+          <div class="topbar-title">💻 Cyber Crime Investigation Dashboard</div>
+          <div class="topbar-clock" id="cyberClock">00:00:00</div>
+        </div>
+        <div class="topbar-right">
+          <button class="btn btn-purple" id="btnAddReport">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            File New Report
+          </button>
+        </div>
+      </div>
+
+      <!-- ========== CONTENT ========== -->
+      <div class="cyber-content">
+
+        <!-- ===== ANALYTICS ROW ===== -->
+        <div class="analytics-row" id="analyticsSection">
+          <div class="ana-card total-card">
+            <div class="ana-icon">🗂</div>
+            <div class="ana-meta">
+              <div class="ana-num" id="anaTotal">0</div>
+              <div class="ana-label">Total Cases</div>
+            </div>
+          </div>
+          <div class="ana-card pending-card">
+            <div class="ana-icon">⏳</div>
+            <div class="ana-meta">
+              <div class="ana-num" id="anaPending">0</div>
+              <div class="ana-label">Pending</div>
+            </div>
+          </div>
+          <div class="ana-card resolved-card">
+            <div class="ana-icon">✅</div>
+            <div class="ana-meta">
+              <div class="ana-num" id="anaResolved">0</div>
+              <div class="ana-label">Resolved</div>
+            </div>
+          </div>
+          <div class="ana-card highrisk-card">
+            <div class="ana-icon">🔴</div>
+            <div class="ana-meta">
+              <div class="ana-num" id="anaHighRisk">0</div>
+              <div class="ana-label">High Risk</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== SEARCH & FILTER ===== -->
+        <div class="filter-bar">
+          <!-- Search -->
+          <div class="search-wrap">
+            <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input class="filter-input" id="searchInput" type="text"
+              placeholder="Search by name, type, description…" autocomplete="off" />
+          </div>
+
+          <!-- Crime type filter -->
+          <select class="filter-select" id="typeFilter">
+            <option value="all">All Crime Types</option>
+            <option value="Fraud">Fraud</option>
+            <option value="Blackmail">Blackmail</option>
+            <option value="Harassment">Harassment</option>
+            <option value="Scam">Scam</option>
+            <option value="Nude Leak">Nude Leak</option>
+            <option value="Cyberstalking">Cyberstalking</option>
+            <option value="Phishing">Phishing</option>
+            <option value="Identity Theft">Identity Theft</option>
+            <option value="Other">Other</option>
+          </select>
+
+          <!-- Status filter -->
+          <select class="filter-select" id="statusFilter">
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="investigating">Investigating</option>
+            <option value="resolved">Resolved</option>
+          </select>
+
+          <!-- Mobile: File report button -->
+          <button class="btn btn-purple" id="btnAddReport" style="display:none">
+            + File Report
+          </button>
+
+          <!-- Clear -->
+          <button class="btn btn-ghost" id="btnClearFilters" title="Clear all filters">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+            Clear
+          </button>
+        </div>
+
+        <!-- ===== MAIN GRID (Table + Evidence) ===== -->
+        <div class="main-grid">
+
+          <!-- LEFT: Reports Table -->
+          <div class="panel" id="reportsSection">
+            <div class="panel-head" style="position:relative;overflow:hidden">
+              <div class="scan-line"></div>
+              <div class="panel-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--purple-400)" stroke-width="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                Cyber Crime Case Registry
+              </div>
+              <div class="live-indicator">
+                <div class="blink-dot"></div>
+                <span id="rowCount">0</span> cases
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="reports-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Victim Name</th>
+                    <th>Crime Type</th>
+                    <th>Description</th>
+                    <th>Risk Level</th>
+                    <th>Status</th>
+                    <th>Filed At</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="reportsTbody">
+                  <tr>
+                    <td colspan="8" class="empty-table">
+                      <span class="empty-icon">📡</span>
+                      Connecting to database…
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- RIGHT: Evidence Viewer -->
+          <div class="evidence-panel" id="evidenceSection">
+            <div class="evidence-card" id="evidencePanel">
+              <!-- Populated by cyberdashboard.js -->
+              <div class="ev-head">
+                <div class="ev-title">📋 Report Detail</div>
+              </div>
+              <div class="ev-empty">
+                <span class="ev-empty-icon">📂</span>
+                Select a report from the table<br>to view evidence and details.
+              </div>
+            </div>
+
+            <!-- Quick Risk Legend -->
+            <div class="panel" style="border-color:var(--border-glow)">
+              <div class="panel-head">
+                <div class="panel-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  Risk Detection Guide
+                </div>
+              </div>
+              <div style="padding:14px;display:flex;flex-direction:column;gap:8px;font-size:.77rem">
+                <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:var(--bg-card-3);border-radius:var(--r-sm);border-left:3px solid var(--risk-high)">
+                  <span style="font-size:1rem">🔴</span>
+                  <div>
+                    <div style="font-weight:700;color:var(--risk-high);margin-bottom:2px">HIGH RISK</div>
+                    <div style="color:var(--text-3);font-size:.7rem;font-family:'JetBrains Mono',monospace">blackmail · nude · leak · extort · suicide · assault</div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:var(--bg-card-3);border-radius:var(--r-sm);border-left:3px solid var(--risk-medium)">
+                  <span style="font-size:1rem">🟡</span>
+                  <div>
+                    <div style="font-weight:700;color:var(--risk-medium);margin-bottom:2px">MEDIUM RISK</div>
+                    <div style="color:var(--text-3);font-size:.7rem;font-family:'JetBrains Mono',monospace">fraud · OTP · money · bank · scam · ransom</div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:var(--bg-card-3);border-radius:var(--r-sm);border-left:3px solid var(--risk-low)">
+                  <span style="font-size:1rem">🟢</span>
+                  <div>
+                    <div style="font-weight:700;color:var(--risk-low);margin-bottom:2px">LOW RISK</div>
+                    <div style="color:var(--text-3);font-size:.7rem;font-family:'JetBrains Mono',monospace">harassment · troll · stalk · offensive · abuse</div>
+                  </div>
+                </div>
+                <div style="font-size:.68rem;color:var(--text-3);text-align:center;font-family:'JetBrains Mono',monospace;margin-top:4px">
+                  Auto-detected from description + crime type
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /main-grid -->
+
+      </div><!-- /cyber-content -->
+    </main>
+  </div><!-- /cyber-layout -->
+
+  <!-- ==========================================
+       ADD REPORT MODAL
+  ========================================== -->
+  <div class="modal-overlay" id="addReportModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div class="modal-title">📝 File New Cyber Crime Report</div>
+        <button class="btn btn-ghost btn-sm" id="modalClose">✕ Close</button>
+      </div>
+      <form id="addReportForm">
+        <div class="modal-body">
+
+          <div class="form-group">
+            <label class="form-label" for="f_user_name">Victim / Reporter Name</label>
+            <input class="form-input" id="f_user_name" name="user_name"
+              type="text" placeholder="Full name of victim or reporter" required />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="f_crime_type">Crime Type</label>
+            <select class="form-select" id="f_crime_type" name="crime_type" required>
+              <option value="">Select type…</option>
+              <option value="Fraud">Fraud</option>
+              <option value="Blackmail">Blackmail</option>
+              <option value="Harassment">Harassment</option>
+              <option value="Scam">Scam</option>
+              <option value="Nude Leak">Nude Leak</option>
+              <option value="Cyberstalking">Cyberstalking</option>
+              <option value="Phishing">Phishing</option>
+              <option value="Identity Theft">Identity Theft</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="f_description">Description of Incident</label>
+            <textarea class="form-textarea" id="f_description" name="description"
+              placeholder="Describe the cyber crime in detail. Include relevant keywords like OTP, money, fraud, blackmail etc. for automatic risk detection…"
+              required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="f_evidence_url">Evidence Links</label>
+            <input class="form-input" id="f_evidence_url" name="evidence_url"
+              type="text"
+              placeholder="Separate multiple links with | (e.g. https://drive.google.com/… | https://t.me/…)" />
+            <span style="font-size:.7rem;color:var(--text-3);font-family:'JetBrains Mono',monospace">
+              Accepted: Google Drive, Telegram, images, PDF, social media links
+            </span>
+          </div>
+
+          <!-- Risk preview (live) -->
+          <div id="riskPreview" style="background:var(--bg-card-3);border:1px solid var(--border);
+            border-radius:var(--r-sm);padding:10px 14px;font-size:.78rem;display:flex;align-items:center;gap:10px;">
+            <span>⚠️</span>
+            <span style="color:var(--text-2)">Risk level will be auto-detected after submission.</span>
+          </div>
+
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost" id="modalClose2" onclick="document.getElementById('addReportModal').classList.remove('open')">Cancel</button>
+          <button type="submit" class="btn btn-purple">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            Submit Report
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Live risk preview in modal -->
+  <script>
+    (function () {
+      const desc = document.getElementById('f_description');
+      const type = document.getElementById('f_crime_type');
+      const preview = document.getElementById('riskPreview');
+
+      const HIGH   = ['blackmail','nude','leak','suicide','kill','rape','assault','extort','threat'];
+      const MEDIUM = ['fraud','otp','money','bank','account','password','scam','fake','ransom'];
+
+      function calcRisk() {
+        if (!desc || !preview) return;
+        const t = (desc.value + ' ' + (type?.value||'')).toLowerCase();
+        let risk = 'low';
+        for (const k of HIGH)   { if (t.includes(k)) { risk = 'high'; break; } }
+        if (risk !== 'high') {
+          let hits = 0;
+          for (const k of MEDIUM) { if (t.includes(k)) hits++; }
+          if (hits >= 2) risk = 'high';
+          else if (hits >= 1) risk = 'medium';
+        }
+        const colors = { high:'#ef4444', medium:'#f59e0b', low:'#10b981' };
+        const labels = { high:'🔴 HIGH RISK — Immediate attention required', medium:'🟡 MEDIUM RISK — Needs prompt investigation', low:'🟢 LOW RISK — Standard protocol' };
+        preview.style.borderColor = colors[risk] + '44';
+        preview.innerHTML = `<span style="font-size:1rem">${risk==='high'?'🔴':risk==='medium'?'🟡':'🟢'}</span>
+          <span style="color:${colors[risk]};font-weight:600;font-size:.8rem">${labels[risk]}</span>`;
+      }
+
+      desc?.addEventListener('input', calcRisk);
+      type?.addEventListener('change', calcRisk);
+
+      // Also open the mobile add report button
+      const mbtn = document.querySelectorAll('#btnAddReport');
+      mbtn.forEach(b => {
+        b.addEventListener('click', () => document.getElementById('addReportModal').classList.add('open'));
+      });
+
+      // Show mobile add btn
+      if (window.innerWidth < 920) {
+        const mobileBtn = document.querySelector('.filter-bar #btnAddReport');
+        if (mobileBtn) mobileBtn.style.display = '';
+      }
+    })();
+  </script>
+
+  <!-- ==========================================
+       TOAST
+  ========================================== -->
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <!-- ==========================================
+       SCRIPTS
+  ========================================== -->
+  <script src="js/supabase.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/cyberdashboard.js"></script>
+  <script src="js/translate.js"></script>
+  <style>
+    /* Evidence: inline video / image previews */
+    .ev-video-wrap {
+      background: var(--bg-card-3, #060a10);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+    .ev-video-label {
+      font-size: 0.70rem;
+      color: var(--text-3, #94a3b8);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .ev-video-player {
+      width: 100%;
+      max-height: 220px;
+      border-radius: 4px;
+      background: #000;
+      display: block;
+      outline: none;
+    }
+    .ev-img-preview {
+      width: 100%;
+      max-height: 200px;
+      object-fit: contain;
+      border-radius: 4px;
+      display: block;
+      background: var(--bg-card-3, #060a10);
+    }
+    .evidence-link-copy {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.72rem;
+      color: var(--blue-400, #60a5fa);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .evidence-link-copy:hover {
+      background: rgba(59,130,246,0.10);
+      color: white;
+    }
+  </style>
+</body>
+</html>
