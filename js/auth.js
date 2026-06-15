@@ -102,17 +102,21 @@ class AuthService {
 
           // 2. Create profile row in profiles table
           const profile = {
-            id: data.user.id,
-            name: name,
-            email: email,
-            phone: phone,
-            role: role,
-            contacts: [{ name: 'Emergency Helpline', phone: '112' }]
-          };
+    id: data.user.id,
+    full_name: name,
+    email: email,
+    phone: phone,
+    role: role
+};
 
-          const { error: profileError } = await client
-            .from('profiles')
-            .insert([profile]);
+const { error: profileError } = await client
+  .from('profiles')
+  .insert([profile]);
+
+if (profileError) {
+    console.error("Profile Insert Error:", profileError);
+    throw profileError;
+}
 
           if (profileError) {
             console.warn("Failed to insert profile row, check if trigger is already active:", profileError);
