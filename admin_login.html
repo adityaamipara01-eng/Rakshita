@@ -348,20 +348,32 @@
       // But for mock convenience and user request, we validate adityaamipara@gmail.com / Aditya@01022008
       const isMockCredential = (email === 'adityaamipara@gmail.com' && password === 'Aditya@01022008');
       
-      if (isMockCredential) {
-        // Successful login
-        // Cache the session role in sessionStorage
-        const sessionUser = {
-          name: selectedRole === 'superadmin' ? 'Super Admin Aditya' : (selectedRole === 'policeadmin' ? 'PCR Officer Aditya' : 'Cyber Agent Aditya'),
-          email: email,
-          role: selectedRole
-        };
-        sessionStorage.setItem('rakshika_session', JSON.stringify(sessionUser));
-        sessionStorage.setItem('rak_role', selectedRole);
+ if (isMockCredential) {
 
-        // Redirect to admin dashboard
-        window.location.href = 'admin.html';
-      } else {
+const sessionUser = {
+name: selectedRole === 'superadmin'
+? 'Super Admin Aditya'
+: (selectedRole === 'policeadmin'
+? 'PCR Officer Aditya'
+: 'Cyber Agent Aditya'),
+email: email,
+role: selectedRole
+};
+
+sessionStorage.setItem('rakshika_session', JSON.stringify(sessionUser));
+sessionStorage.setItem('rak_role', selectedRole);
+
+if (selectedRole === 'superadmin') {
+window.location.href = 'admin.html';
+}
+else if (selectedRole === 'policeadmin') {
+window.location.href = 'police.html';
+}
+else if (selectedRole === 'cyberadmin') {
+window.location.href = 'cyberdashboard.html';
+}
+}
+else {
         // Fallback checks standard mock DB
         const res = await window.rakshikaAuth.login(email, password, selectedRole === 'superadmin' ? 'superadmin' : (selectedRole === 'policeadmin' ? 'police' : 'cyber'));
         if (res.success) {
